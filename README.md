@@ -8,15 +8,26 @@ A strategic physics-based Tetris game where you stack tetrominoes to build the t
 Build the tallest tower possible by stacking tetrominoes on a small platform. You have 3 lives - lose one each time a piece falls off the platform.
 
 ### Controls
+
+#### Desktop Controls
 - **Arrow Keys**: Move pieces left/right (full steps)
 - **A/D Keys**: Move pieces left/right (half steps for precision)
 - **R or ↑**: Rotate pieces
 - **Space**: Drop pieces faster
-- **Touch Controls**: Use on-screen buttons or swipe gestures on mobile
+
+#### Mobile Controls
+- **Tap**: Rotate piece
+- **Swipe ←/→**: Move left/right
+- **Swipe ↓**: Drop piece
+- **Swipe ↑**: Rotate piece
+- **Touch Buttons**: On-screen control buttons
+- **Haptic Feedback**: Vibration on touch actions
 
 ### Scoring
-- **Final Score**: Based on tower height (100 points per block height)
+- **Base Score**: 100 points per block height
+- **Milestone Bonuses**: Extra points at height milestones (height × 10 bonus)
 - **Height Tracking**: Real-time display of current tower height
+- **Stability Meter**: Visual indicator of tower stability
 - **Life System**: 3 lives - game ends when all are lost
 
 ## 🚀 Features
@@ -31,12 +42,32 @@ Build the tallest tower possible by stacking tetrominoes on a small platform. Yo
 - **Responsive Design**: Works on both desktop and mobile devices
 - **Visual Polish**: Modern UI with glassmorphism effects
 
+### Enhanced Features
+- **Particle Effects**: Beautiful particle explosions when pieces land
+- **Sound System**: Audio feedback for all actions (landing, movement, achievements)
+- **Height Milestones**: Celebrations and bonus points at 10, 25, 50, 100, 150, 200, 300, 500 blocks
+- **Achievement System**: Pop-up notifications with bonus scoring
+- **Stability Indicator**: Real-time tower stability meter with color-coded feedback
+- **Screen Shake**: Dramatic effects when pieces fall off
+- **Mobile Optimized**: Touch controls, haptic feedback, and responsive layouts
+- **Gesture Controls**: Swipe and tap controls for mobile devices
+- **Auto-Rotate Support**: Seamless landscape/portrait mode switching
+- **Smart Spawn System**: Pieces spawn relative to camera position for infinite building
+- **Graceful Physics**: Smooth piece sliding with optimized friction and damping
+- **Comprehensive Fall Detection**: All pieces monitored continuously for platform falls
+
 ### Game Mechanics
 - **Small Platform**: 200px wide platform with side gaps for challenge
 - **No Bouncing**: Pieces stick immediately upon landing
-- **Collision Detection**: Immediate next piece spawning when pieces land
+- **Smart Collision Detection**: Multi-method detection for reliable piece landing
 - **Fall Detection**: All pieces (current and previous) count towards life loss
 - **Camera Following**: Smooth camera movement when tower reaches 300px height
+- **Graceful Placement**: 8px tolerance for smooth piece sliding into position
+- **Particle Effects**: Visual feedback when pieces land
+- **Audio Feedback**: Sound effects for all game actions
+- **Smart Spawning**: Camera-relative spawn positions prevent off-screen spawning
+- **Smooth Physics**: Optimized friction and damping for natural piece movement
+- **Continuous Monitoring**: All placed pieces monitored for falling off platform
 
 ## 🛠️ Technical Details
 
@@ -61,6 +92,10 @@ builders/
 - **Camera Trigger**: 300px height
 - **Gravity**: 0.1 (slow, strategic falling)
 - **Lives**: 3
+- **Collision Tolerance**: 8px vertical, 5px horizontal
+- **Milestone Heights**: 10, 25, 50, 100, 150, 200, 300, 500 blocks
+- **Physics Settings**: Friction 0.5, Static Friction 0.7, Air Resistance 0.03
+- **Spawn Safety**: 100px above camera view, 150px if blocked
 
 ## 🎯 Future Enhancement Ideas
 
@@ -159,14 +194,14 @@ builders/
   - [ ] Blueprint mode - plan towers before building
 
 ### 🔥 High Priority Quick Wins
-- [ ] Particle effects on piece landing
-- [ ] Sound effects for key actions
-- [ ] Height milestone celebrations
-- [ ] Stability indicator in UI
+- [x] Particle effects on piece landing
+- [x] Sound effects for key actions
+- [x] Height milestone celebrations
+- [x] Stability indicator in UI
 - [ ] Next 3 pieces preview
-- [ ] Achievement pop-ups
-- [ ] Screen shake on dramatic falls
-- [ ] Better visual feedback for perfect placements
+- [x] Achievement pop-ups
+- [x] Screen shake on dramatic falls
+- [x] Better visual feedback for perfect placements
 
 ## 🚀 Getting Started
 
@@ -192,10 +227,26 @@ To modify the game:
 3. **Plan Ahead**: Look at the next piece to plan your current placement
 4. **Balance is Key**: Keep your tower centered on the platform
 5. **Manage Risk**: Higher towers are riskier but give better scores
+6. **Watch Your Stability**: Use the stability meter to gauge tower health
+7. **Aim for Milestones**: Height milestones give significant bonus points
+8. **Mobile Players**: Use swipe gestures for quick, precise movements
 
 ## 📝 Version History
 
-### Current Version Features
+### Version 2.0 - Enhanced Edition
+- **Particle Effects**: Visual feedback when pieces land
+- **Sound System**: Audio feedback for all actions
+- **Achievement System**: Height milestones with bonus points
+- **Stability Indicator**: Real-time tower stability meter
+- **Mobile Optimization**: Touch controls, haptic feedback, gesture support
+- **Screen Effects**: Shake effects for dramatic moments
+- **Enhanced UI**: Better visual feedback and responsive design
+- **Smart Spawn System**: Camera-relative spawning for infinite building
+- **Graceful Physics**: Optimized friction and smooth piece sliding
+- **Comprehensive Monitoring**: All pieces tracked for fall detection
+- **Improved Collision**: Multi-method detection with graceful placement
+
+### Version 1.0 - Core Features
 - Physics-based tetromino stacking
 - 3-life system with fall detection
 - Dynamic camera following

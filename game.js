@@ -15,8 +15,6 @@ let gameState = {
         targetY: 0
     },
     particles: [],
-    achievements: [],
-    milestones: [10, 25, 50, 100, 150, 200, 300, 500] // Height milestones
 };
 
 // Physics engine setup
@@ -99,10 +97,18 @@ function initGame() {
     engine.world.gravity.x = 0; // No horizontal gravity
     engine.world.gravity.scale = 0.0005; // Very low scale for maximum control
     
-    // Balanced physics settings for natural movement
-    engine.world.constraintIterations = 3;
-    engine.world.positionIterations = 6;
-    engine.world.velocityIterations = 4;
+    // Optimized physics settings to reduce jittering
+    engine.world.constraintIterations = 2;
+    engine.world.positionIterations = 4;
+    engine.world.velocityIterations = 2;
+    
+    // Reduce sleeping threshold to make pieces sleep faster
+    Matter.Engine.update(engine, 16.666); // One frame worth of time
+    engine.world.bodies.forEach(body => {
+        if (body.sleepThreshold !== undefined) {
+            body.sleepThreshold = 0.1; // Lower threshold for sleeping
+        }
+    });
     
     // Create renderer
     render = Matter.Render.create({
@@ -210,13 +216,14 @@ function createTetrominoBody(piece, x, y) {
                     BLOCK_SIZE,
                     {
                         render: { fillStyle: piece.color },
-                        friction: 0.5, // Slightly reduced friction for smoother sliding
+                        friction: 0.8, // Higher friction to reduce sliding
                         restitution: 0, // No bouncing at all
-                        density: 0.001, // Heavy blocks
-                        frictionAir: 0.03, // Slightly more air resistance for smoother settling
-                        frictionStatic: 0.7, // Reduced static friction for easier sliding
-                        inertia: 1000, // Allow some rotation but prevent excessive spinning
-                        inverseInertia: 0.001 // Allow some rotation but prevent excessive spinning
+                        density: 0.002, // Heavier blocks to reduce bouncing
+                        frictionAir: 0.05, // More air resistance to dampen movement
+                        frictionStatic: 1.0, // High static friction to prevent micro-movements
+                        inertia: 2000, // Higher inertia to resist rotation
+                        inverseInertia: 0.0005, // Lower inverse inertia for stability
+                        sleepThreshold: 0.1 // Make pieces sleep faster
                     }
                 );
                 
@@ -225,17 +232,18 @@ function createTetrominoBody(piece, x, y) {
         }
     }
     
-    // Create a compound body with balanced properties
+    // Create a compound body with stable properties
     const compound = Matter.Body.create({
         parts: bodies,
         render: { fillStyle: piece.color },
-        friction: 0.5, // Slightly reduced friction for smoother sliding
+        friction: 0.8, // Higher friction to reduce sliding
         restitution: 0, // No bouncing at all
-        density: 0.001,
-        frictionAir: 0.03, // Slightly more air resistance for smoother settling
-        frictionStatic: 0.7, // Reduced static friction for easier sliding
-        inertia: 1000, // Allow some rotation but prevent excessive spinning
-        inverseInertia: 0.001 // Allow some rotation but prevent excessive spinning
+        density: 0.002, // Heavier blocks to reduce bouncing
+        frictionAir: 0.05, // More air resistance to dampen movement
+        frictionStatic: 1.0, // High static friction to prevent micro-movements
+        inertia: 2000, // Higher inertia to resist rotation
+        inverseInertia: 0.0005, // Lower inverse inertia for stability
+        sleepThreshold: 0.1 // Make pieces sleep faster
     });
     
     return compound;
@@ -334,8 +342,8 @@ function movePiece(direction, isHalfStep = false) {
     const currentPos = body.position;
     let newX = currentPos.x;
     
-    // Calculate movement distance (half block size for half steps)
-    const moveDistance = isHalfStep ? BLOCK_SIZE / 2 : BLOCK_SIZE;
+    // Always use half-step movement for precise control
+    const moveDistance = BLOCK_SIZE / 2;
     
     switch (direction) {
         case 'left':
@@ -582,19 +590,11 @@ function setupControls() {
         switch (e.code) {
             case 'ArrowLeft':
                 e.preventDefault();
-                movePiece('left');
+                movePiece('left'); // Half step left
                 break;
             case 'ArrowRight':
                 e.preventDefault();
-                movePiece('right');
-                break;
-            case 'KeyA':
-                e.preventDefault();
-                movePiece('left', true); // Half step left
-                break;
-            case 'KeyD':
-                e.preventDefault();
-                movePiece('right', true); // Half step right
+                movePiece('right'); // Half step right
                 break;
             case 'ArrowUp':
                 e.preventDefault();
@@ -721,53 +721,55 @@ function checkPieceLanded() {
     if (Math.abs(velocity.y) < 0.2 && Math.abs(velocity.x) < 0.2) {
         let hasLanded = false;
         
-        // Simple and reliable method: Check if piece is near the ground
-        const currentBottom = body.bounds.max.y;
-        const groundTop = gameState.ground.bounds.min.y;
-        
-        // Debug logging
-        console.log(`Piece bottom: ${currentBottom}, Ground top: ${groundTop}, Difference: ${currentBottom - groundTop}`);
-        
-        // Check if piece is very close to or touching the ground
-        if (currentBottom >= groundTop - 10 && currentBottom <= groundTop + 15) {
-            // Check if piece is horizontally over the platform
-            const platformLeft = PLATFORM_CENTER_X - PLATFORM_WIDTH / 2;
-            const platformRight = PLATFORM_CENTER_X + PLATFORM_WIDTH / 2;
-            const currentLeft = body.bounds.min.x;
-            const currentRight = body.bounds.max.x;
-            
-            console.log(`Platform: ${platformLeft} to ${platformRight}, Piece: ${currentLeft} to ${currentRight}`);
-            
-            if (currentRight >= platformLeft && currentLeft <= platformRight) {
+        // Method 1: Check collision with ground first (most important)
+        const groundCollision = Matter.Collision.collides(body, gameState.ground);
+        if (groundCollision && groundCollision.collided) {
+            // For rotated pieces, check if any vertex of the piece is touching the ground
+            if (isPieceTouchingGround(body, groundCollision)) {
                 hasLanded = true;
-                console.log('Piece landed on ground!');
+                console.log('Piece landed on ground via direct collision!');
             }
         }
         
-        // Check if piece is on top of other pieces
+        // Method 2: Check collision with other pieces
         if (!hasLanded) {
             for (let piece of gameState.pieces) {
                 if (piece === gameState.currentPiece) continue;
                 
                 const otherBody = piece.body;
-                const currentBottom = body.bounds.max.y;
-                const contactTop = otherBody.bounds.min.y;
-                const currentLeft = body.bounds.min.x;
-                const currentRight = body.bounds.max.x;
-                const contactLeft = otherBody.bounds.min.x;
-                const contactRight = otherBody.bounds.max.x;
+                const collision = Matter.Collision.collides(body, otherBody);
                 
-                // Check if piece is on top of another piece
-                if (currentBottom >= contactTop - 5 && currentBottom <= contactTop + 10) {
-                    // Check horizontal overlap
-                    if (!(currentRight < contactLeft - 5 || currentLeft > contactRight + 5)) {
+                if (collision && collision.collided) {
+                    // For rotated pieces, check if current piece is truly above the other piece
+                    if (isPieceAboveOther(body, otherBody, collision)) {
                         hasLanded = true;
-                        console.log('Piece landed on another piece!');
+                        console.log('Piece landed on another piece via collision!');
                         break;
                     }
                 }
             }
         }
+        
+        // Method 3: Fallback - check if piece is near the ground (bounds check)
+        if (!hasLanded) {
+            const currentBottom = body.bounds.max.y;
+            const groundTop = gameState.ground.bounds.min.y;
+            
+            // Check if piece is very close to or touching the ground
+            if (currentBottom >= groundTop - 10 && currentBottom <= groundTop + 15) {
+                // Check if piece is horizontally over the platform
+                const platformLeft = PLATFORM_CENTER_X - PLATFORM_WIDTH / 2;
+                const platformRight = PLATFORM_CENTER_X + PLATFORM_WIDTH / 2;
+                const currentLeft = body.bounds.min.x;
+                const currentRight = body.bounds.max.x;
+                
+                if (currentRight >= platformLeft && currentLeft <= platformRight) {
+                    hasLanded = true;
+                    console.log('Piece landed on ground via bounds check!');
+                }
+            }
+        }
+        
         
         // If piece has landed, trigger next piece spawn
         if (hasLanded) {
@@ -780,8 +782,6 @@ function checkPieceLanded() {
             // Play landing sound
             playSound('land');
             
-            // Check for height milestones
-            checkHeightMilestones();
             
             // Spawn next piece immediately
             gameState.currentPiece = null;
@@ -790,6 +790,103 @@ function checkPieceLanded() {
             }, 300);
         }
     }
+}
+
+// Helper function to check if a rotated piece is truly touching the ground
+function isPieceTouchingGround(body, collision) {
+    if (!collision || !collision.collided) return false;
+    
+    // Get the vertices of the current piece
+    const vertices = body.vertices;
+    const groundTop = gameState.ground.bounds.min.y;
+    
+    // Check if any vertex is close to the ground level
+    for (let vertex of vertices) {
+        if (Math.abs(vertex.y - groundTop) <= 15) {
+            // Check if this vertex is horizontally over the platform
+            const platformLeft = PLATFORM_CENTER_X - PLATFORM_WIDTH / 2;
+            const platformRight = PLATFORM_CENTER_X + PLATFORM_WIDTH / 2;
+            
+            if (vertex.x >= platformLeft && vertex.x <= platformRight) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+// Helper function to check if current piece is touching another piece (any side)
+function isPieceAboveOther(currentBody, otherBody, collision) {
+    if (!collision || !collision.collided) return false;
+    
+    // Get vertices of both bodies
+    const currentVertices = currentBody.vertices;
+    const otherVertices = otherBody.vertices;
+    
+    // Check for contact from any direction (top, sides, or bottom)
+    const contactTolerance = 15; // pixels
+    
+    // Find the extremes of both pieces
+    let currentMinX = Infinity, currentMaxX = -Infinity;
+    let currentMinY = Infinity, currentMaxY = -Infinity;
+    let otherMinX = Infinity, otherMaxX = -Infinity;
+    let otherMinY = Infinity, otherMaxY = -Infinity;
+    
+    for (let vertex of currentVertices) {
+        currentMinX = Math.min(currentMinX, vertex.x);
+        currentMaxX = Math.max(currentMaxX, vertex.x);
+        currentMinY = Math.min(currentMinY, vertex.y);
+        currentMaxY = Math.max(currentMaxY, vertex.y);
+    }
+    
+    for (let vertex of otherVertices) {
+        otherMinX = Math.min(otherMinX, vertex.x);
+        otherMaxX = Math.max(otherMaxX, vertex.x);
+        otherMinY = Math.min(otherMinY, vertex.y);
+        otherMaxY = Math.max(otherMaxY, vertex.y);
+    }
+    
+    // Check for contact from different directions
+    let hasContact = false;
+    
+    // Check if current piece is landing on top of the other piece
+    if (currentMinY >= otherMaxY - contactTolerance && currentMinY <= otherMaxY + contactTolerance) {
+        // Check if there's horizontal overlap
+        if (!(currentMaxX < otherMinX - contactTolerance || currentMinX > otherMaxX + contactTolerance)) {
+            hasContact = true;
+            console.log('Contact detected: landing on top');
+        }
+    }
+    
+    // Check if current piece is landing on the left side of the other piece
+    if (!hasContact && currentMaxX >= otherMinX - contactTolerance && currentMaxX <= otherMinX + contactTolerance) {
+        // Check if there's vertical overlap
+        if (!(currentMaxY < otherMinY - contactTolerance || currentMinY > otherMaxY + contactTolerance)) {
+            hasContact = true;
+            console.log('Contact detected: landing on left side');
+        }
+    }
+    
+    // Check if current piece is landing on the right side of the other piece
+    if (!hasContact && currentMinX >= otherMaxX - contactTolerance && currentMinX <= otherMaxX + contactTolerance) {
+        // Check if there's vertical overlap
+        if (!(currentMaxY < otherMinY - contactTolerance || currentMinY > otherMaxY + contactTolerance)) {
+            hasContact = true;
+            console.log('Contact detected: landing on right side');
+        }
+    }
+    
+    // Check if current piece is landing below the other piece (rare but possible)
+    if (!hasContact && currentMaxY >= otherMinY - contactTolerance && currentMaxY <= otherMinY + contactTolerance) {
+        // Check if there's horizontal overlap
+        if (!(currentMaxX < otherMinX - contactTolerance || currentMinX > otherMaxX + contactTolerance)) {
+            hasContact = true;
+            console.log('Contact detected: landing below');
+        }
+    }
+    
+    return hasContact;
 }
 
 // Update camera position to follow the tower
@@ -878,45 +975,6 @@ function updateParticles() {
     }
 }
 
-// Check for height milestones
-function checkHeightMilestones() {
-    const currentHeight = Math.floor(gameState.height);
-    
-    for (let milestone of gameState.milestones) {
-        if (currentHeight >= milestone && !gameState.achievements.includes(milestone)) {
-            gameState.achievements.push(milestone);
-            showMilestoneAchievement(milestone);
-        }
-    }
-}
-
-// Show milestone achievement
-function showMilestoneAchievement(height) {
-    // Create achievement popup
-    const popup = document.createElement('div');
-    popup.className = 'achievement-popup';
-    popup.innerHTML = `
-        <div class="achievement-content">
-            <h3>🏗️ Height Milestone!</h3>
-            <p>Reached ${height} blocks high!</p>
-            <div class="achievement-progress">+${height * 10} bonus points</div>
-        </div>
-    `;
-    
-    document.body.appendChild(popup);
-    
-    // Add bonus points
-    gameState.score += height * 10;
-    updateUI();
-    
-    // Play achievement sound
-    playSound('achievement');
-    
-    // Remove popup after animation
-    setTimeout(() => {
-        popup.remove();
-    }, 3000);
-}
 
 // Sound system
 function playSound(type) {
