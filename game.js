@@ -13,7 +13,10 @@ let gameState = {
         x: 0,
         y: 0,
         targetY: 0
-    }
+    },
+    particles: [],
+    achievements: [],
+    milestones: [10, 25, 50, 100, 150, 200, 300, 500] // Height milestones
 };
 
 // Physics engine setup
@@ -135,7 +138,8 @@ function initGame() {
         50, 
         { 
             isStatic: true,
-            render: { fillStyle: '#8B4513' }
+            render: { fillStyle: '#8B4513' },
+            label: 'ground' // Add label for debugging
         }
     );
     
@@ -348,6 +352,9 @@ function movePiece(direction, isHalfStep = false) {
     // Dampen any unwanted velocity from movement
     Matter.Body.setVelocity(body, { x: 0, y: body.velocity.y });
     
+    // Play movement sound
+    playSound('move');
+    
     // Add slight delay to prevent rapid movement
     if (!body.userData || !body.userData.moveCooldown) {
         body.userData = { moveCooldown: true };
@@ -452,6 +459,12 @@ function loseLife() {
     gameState.lives--;
     updateUI();
     
+    // Screen shake on life loss
+    triggerScreenShake();
+    
+    // Play sound effect
+    playSound('lose');
+    
     if (gameState.lives <= 0) {
         gameOver();
     } else {
@@ -492,11 +505,72 @@ function showGameOverScreen() {
     document.getElementById('final-height').textContent = gameState.height;
 }
 
+// Calculate tower stability
+function calculateStability() {
+    if (gameState.pieces.length === 0) return 100;
+    
+    let totalStability = 0;
+    let pieceCount = 0;
+    
+    gameState.pieces.forEach(piece => {
+        if (piece === gameState.currentPiece) return; // Skip current piece
+        
+        const body = piece.body;
+        const bounds = body.bounds;
+        
+        // Check how well supported this piece is
+        let supportScore = 0;
+        
+        // Check if piece is on the ground
+        if (bounds.max.y >= GROUND_Y - 5) {
+            supportScore = 100; // Fully supported by ground
+        } else {
+            // Check support from other pieces
+            const contacts = Matter.Query.region(engine.world.bodies, bounds);
+            let supportCount = 0;
+            
+            contacts.forEach(contact => {
+                if (contact === body) return;
+                if (contact === gameState.ground || gameState.walls.includes(contact)) return;
+                
+                const contactBounds = contact.bounds;
+                // Check if this contact is supporting the piece
+                if (contactBounds.max.y >= bounds.min.y - 5 && 
+                    contactBounds.min.y <= bounds.max.y + 5) {
+                    supportCount++;
+                }
+            });
+            
+            supportScore = Math.min(100, supportCount * 25); // Each support adds 25%
+        }
+        
+        totalStability += supportScore;
+        pieceCount++;
+    });
+    
+    return pieceCount > 0 ? Math.round(totalStability / pieceCount) : 100;
+}
+
 // Update UI elements
 function updateUI() {
     document.getElementById('score').textContent = gameState.score;
     document.getElementById('height').textContent = gameState.height;
     document.getElementById('lives').textContent = gameState.lives;
+    
+    // Update stability indicator
+    const stability = calculateStability();
+    document.getElementById('stability').textContent = stability + '%';
+    const stabilityFill = document.getElementById('stability-fill');
+    stabilityFill.style.width = stability + '%';
+    
+    // Change color based on stability
+    if (stability >= 80) {
+        stabilityFill.style.background = 'linear-gradient(90deg, #32cd32, #228b22)';
+    } else if (stability >= 50) {
+        stabilityFill.style.background = 'linear-gradient(90deg, #ffa500, #ff8c00)';
+    } else {
+        stabilityFill.style.background = 'linear-gradient(90deg, #ff6b6b, #dc143c)';
+    }
 }
 
 // Setup controls
@@ -643,46 +717,77 @@ function checkPieceLanded() {
     const body = gameState.currentPiece.body;
     const velocity = body.velocity;
     
-    // More lenient velocity check for smoother sliding
-    if (velocity.y > -0.2 && Math.abs(velocity.x) < 0.3) {
-        // Check if piece is actually touching something
-        const contacts = Matter.Query.region(engine.world.bodies, body.bounds);
+    // More lenient velocity check - allow some movement
+    if (Math.abs(velocity.y) < 0.2 && Math.abs(velocity.x) < 0.2) {
+        let hasLanded = false;
         
-        for (let contact of contacts) {
-            if (contact === body) continue; // Skip self
+        // Simple and reliable method: Check if piece is near the ground
+        const currentBottom = body.bounds.max.y;
+        const groundTop = gameState.ground.bounds.min.y;
+        
+        // Debug logging
+        console.log(`Piece bottom: ${currentBottom}, Ground top: ${groundTop}, Difference: ${currentBottom - groundTop}`);
+        
+        // Check if piece is very close to or touching the ground
+        if (currentBottom >= groundTop - 10 && currentBottom <= groundTop + 15) {
+            // Check if piece is horizontally over the platform
+            const platformLeft = PLATFORM_CENTER_X - PLATFORM_WIDTH / 2;
+            const platformRight = PLATFORM_CENTER_X + PLATFORM_WIDTH / 2;
+            const currentLeft = body.bounds.min.x;
+            const currentRight = body.bounds.max.x;
             
-            // Check if it's touching ground, walls, or other pieces
-            if (contact === gameState.ground || 
-                gameState.walls.includes(contact) || 
-                gameState.pieces.some(piece => piece.body === contact)) {
+            console.log(`Platform: ${platformLeft} to ${platformRight}, Piece: ${currentLeft} to ${currentRight}`);
+            
+            if (currentRight >= platformLeft && currentLeft <= platformRight) {
+                hasLanded = true;
+                console.log('Piece landed on ground!');
+            }
+        }
+        
+        // Check if piece is on top of other pieces
+        if (!hasLanded) {
+            for (let piece of gameState.pieces) {
+                if (piece === gameState.currentPiece) continue;
                 
-                // More generous positioning check for smoother placement
+                const otherBody = piece.body;
                 const currentBottom = body.bounds.max.y;
-                const contactTop = contact.bounds.min.y;
+                const contactTop = otherBody.bounds.min.y;
                 const currentLeft = body.bounds.min.x;
                 const currentRight = body.bounds.max.x;
-                const contactLeft = contact.bounds.min.x;
-                const contactRight = contact.bounds.max.x;
+                const contactLeft = otherBody.bounds.min.x;
+                const contactRight = otherBody.bounds.max.x;
                 
-                // Check if piece is on top with more tolerance
-                const verticalOverlap = currentBottom >= contactTop - 8; // Increased from 5px to 8px
-                
-                // Check if pieces are horizontally aligned (allowing some sliding)
-                const horizontalOverlap = !(currentRight < contactLeft - 10 || currentLeft > contactRight + 10);
-                
-                // Only spawn next piece if piece is on top and horizontally aligned
-                if (verticalOverlap && horizontalOverlap) {
-                    // Mark piece as landed to prevent multiple spawns
-                    gameState.currentPiece.hasLanded = true;
-                    
-                    // Spawn next piece immediately
-                    gameState.currentPiece = null;
-                    setTimeout(() => {
-                        spawnNewPiece();
-                    }, 300);
-                    break;
+                // Check if piece is on top of another piece
+                if (currentBottom >= contactTop - 5 && currentBottom <= contactTop + 10) {
+                    // Check horizontal overlap
+                    if (!(currentRight < contactLeft - 5 || currentLeft > contactRight + 5)) {
+                        hasLanded = true;
+                        console.log('Piece landed on another piece!');
+                        break;
+                    }
                 }
             }
+        }
+        
+        // If piece has landed, trigger next piece spawn
+        if (hasLanded) {
+            // Mark piece as landed to prevent multiple spawns
+            gameState.currentPiece.hasLanded = true;
+            
+            // Create landing particles
+            createLandingParticles(body.position.x, body.position.y, gameState.currentPiece.color);
+            
+            // Play landing sound
+            playSound('land');
+            
+            // Check for height milestones
+            checkHeightMilestones();
+            
+            // Spawn next piece immediately
+            gameState.currentPiece = null;
+            setTimeout(() => {
+                spawnNewPiece();
+            }, 300);
         }
     }
 }
@@ -721,11 +826,180 @@ function updateCamera() {
     });
 }
 
+// Create landing particles
+function createLandingParticles(x, y, color) {
+    const particleCount = 8;
+    for (let i = 0; i < particleCount; i++) {
+        const angle = (Math.PI * 2 * i) / particleCount;
+        const speed = 2 + Math.random() * 3;
+        const life = 30 + Math.random() * 20;
+        
+        gameState.particles.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: life,
+            maxLife: life,
+            color: color,
+            size: 3 + Math.random() * 2
+        });
+    }
+}
+
+// Update and render particles
+function updateParticles() {
+    const ctx = canvas.getContext('2d');
+    
+    for (let i = gameState.particles.length - 1; i >= 0; i--) {
+        const particle = gameState.particles[i];
+        
+        // Update particle
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        particle.vy += 0.1; // Gravity
+        particle.life--;
+        
+        // Remove dead particles
+        if (particle.life <= 0) {
+            gameState.particles.splice(i, 1);
+            continue;
+        }
+        
+        // Render particle
+        const alpha = particle.life / particle.maxLife;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = particle.color;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// Check for height milestones
+function checkHeightMilestones() {
+    const currentHeight = Math.floor(gameState.height);
+    
+    for (let milestone of gameState.milestones) {
+        if (currentHeight >= milestone && !gameState.achievements.includes(milestone)) {
+            gameState.achievements.push(milestone);
+            showMilestoneAchievement(milestone);
+        }
+    }
+}
+
+// Show milestone achievement
+function showMilestoneAchievement(height) {
+    // Create achievement popup
+    const popup = document.createElement('div');
+    popup.className = 'achievement-popup';
+    popup.innerHTML = `
+        <div class="achievement-content">
+            <h3>🏗️ Height Milestone!</h3>
+            <p>Reached ${height} blocks high!</p>
+            <div class="achievement-progress">+${height * 10} bonus points</div>
+        </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Add bonus points
+    gameState.score += height * 10;
+    updateUI();
+    
+    // Play achievement sound
+    playSound('achievement');
+    
+    // Remove popup after animation
+    setTimeout(() => {
+        popup.remove();
+    }, 3000);
+}
+
+// Sound system
+function playSound(type) {
+    // Create audio context if it doesn't exist
+    if (!window.audioContext) {
+        window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    const ctx = window.audioContext;
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    
+    // Different sounds for different actions
+    switch (type) {
+        case 'land':
+            oscillator.frequency.setValueAtTime(440, ctx.currentTime); // A4
+            oscillator.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.1);
+            gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.1);
+            break;
+            
+        case 'lose':
+            oscillator.frequency.setValueAtTime(200, ctx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.3);
+            gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.3);
+            break;
+            
+        case 'achievement':
+            // Play a pleasant chord
+            const frequencies = [523.25, 659.25, 783.99]; // C5, E5, G5
+            frequencies.forEach((freq, index) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.setValueAtTime(freq, ctx.currentTime + index * 0.1);
+                gain.gain.setValueAtTime(0.1, ctx.currentTime + index * 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5 + index * 0.1);
+                osc.start(ctx.currentTime + index * 0.1);
+                osc.stop(ctx.currentTime + 0.5 + index * 0.1);
+            });
+            break;
+            
+        case 'move':
+            oscillator.frequency.setValueAtTime(800, ctx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.05);
+            gainNode.gain.setValueAtTime(0.05, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.05);
+            break;
+    }
+}
+
+// Screen shake effect
+function triggerScreenShake() {
+    const gameContainer = document.querySelector('.game-container');
+    gameContainer.classList.add('shake');
+    
+    setTimeout(() => {
+        gameContainer.classList.remove('shake');
+    }, 500);
+}
+
 // Game loop
 function gameLoop() {
     if (!gameState.gameOver) {
         // Update camera to follow tower height
         updateCamera();
+        
+        // Update particles
+        updateParticles();
+        
+        // Update UI (including stability)
+        updateUI();
         
         // The collision detection now handles spawning the next piece
         // This loop is kept for any other game logic that might be needed
@@ -754,7 +1028,10 @@ function restartGame() {
             x: 0,
             y: 0,
             targetY: 0
-        }
+        },
+        particles: [],
+        achievements: [],
+        milestones: [10, 25, 50, 100, 150, 200, 300, 500]
     };
     
     // Hide game over screen
