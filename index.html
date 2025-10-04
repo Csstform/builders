@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower Tetris - Physics Stacking Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="ui-panel">
+            <div class="score-display">
+                <h2>Score: <span id="score">0</span></h2>
+                <h3>Height: <span id="height">0</span></h3>
+                <h3>Lives: <span id="lives">3</span></h3>
+            </div>
+            <div class="next-piece">
+                <h3>Next:</h3>
+                <canvas id="next-canvas" width="80" height="80"></canvas>
+            </div>
+        </div>
+        
+        <div class="game-area">
+            <canvas id="game-canvas" width="400" height="600"></canvas>
+            <div class="game-over" id="game-over" style="display: none;">
+                <h2>Game Over!</h2>
+                <p>Final Score: <span id="final-score">0</span></p>
+                <p>Final Height: <span id="final-height">0</span></p>
+                <button id="restart-btn">Play Again</button>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div class="control-buttons">
+                <button id="left-btn">←</button>
+                <button id="rotate-btn">↻</button>
+                <button id="right-btn">→</button>
+                <button id="drop-btn">↓</button>
+            </div>
+            <div class="instructions">
+                <p><strong>Controls:</strong></p>
+                <p>Arrow Keys: Full steps</p>
+                <p>A/D Keys: Half steps</p>
+                <p>R or ↑: Rotate</p>
+                <p>Space: Drop faster</p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
