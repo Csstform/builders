@@ -206,11 +206,11 @@ function createTetrominoBody(piece, x, y) {
                     BLOCK_SIZE,
                     {
                         render: { fillStyle: piece.color },
-                        friction: 0.6, // Moderate friction for stable but natural stacking
+                        friction: 0.5, // Slightly reduced friction for smoother sliding
                         restitution: 0, // No bouncing at all
                         density: 0.001, // Heavy blocks
-                        frictionAir: 0.02, // Light air resistance to dampen small movements
-                        frictionStatic: 0.8, // Moderate static friction
+                        frictionAir: 0.03, // Slightly more air resistance for smoother settling
+                        frictionStatic: 0.7, // Reduced static friction for easier sliding
                         inertia: 1000, // Allow some rotation but prevent excessive spinning
                         inverseInertia: 0.001 // Allow some rotation but prevent excessive spinning
                     }
@@ -225,11 +225,11 @@ function createTetrominoBody(piece, x, y) {
     const compound = Matter.Body.create({
         parts: bodies,
         render: { fillStyle: piece.color },
-        friction: 0.6,
+        friction: 0.5, // Slightly reduced friction for smoother sliding
         restitution: 0, // No bouncing at all
         density: 0.001,
-        frictionAir: 0.02, // Light air resistance to dampen small movements
-        frictionStatic: 0.8,
+        frictionAir: 0.03, // Slightly more air resistance for smoother settling
+        frictionStatic: 0.7, // Reduced static friction for easier sliding
         inertia: 1000, // Allow some rotation but prevent excessive spinning
         inverseInertia: 0.001 // Allow some rotation but prevent excessive spinning
     });
@@ -249,7 +249,8 @@ function spawnNewPiece() {
     gameState.currentPiece = {
         body: createTetrominoBody(piece, spawnPos.x, spawnPos.y),
         type: piece.type,
-        color: piece.color
+        color: piece.color,
+        hasLanded: false // Track if this piece has already triggered spawning
     };
     
     Matter.World.add(world, gameState.currentPiece.body);
@@ -262,8 +263,14 @@ function spawnNewPiece() {
 
 // Find a safe spawn position that doesn't overlap with existing pieces
 function findSafeSpawnPosition() {
-    let spawnY = SPAWN_Y;
+    // Calculate spawn position relative to camera
+    const cameraOffset = gameState.camera.y;
+    let spawnY = SPAWN_Y + cameraOffset; // Adjust spawn Y with camera
     let spawnX = SPAWN_X;
+    
+    // Ensure spawn is always visible (above camera view)
+    const minSpawnY = cameraOffset - 100; // Spawn above camera view
+    spawnY = Math.min(spawnY, minSpawnY);
     
     // Check if default spawn position is clear
     const testBounds = {
@@ -279,9 +286,9 @@ function findSafeSpawnPosition() {
         gameState.pieces.some(piece => piece.body === body)
     );
     
-    // If there's a collision, try moving up
+    // If there's a collision, try moving up further
     if (hasCollision) {
-        spawnY = 20; // Move higher up
+        spawnY = cameraOffset - 150; // Move higher up relative to camera
     }
     
     return { x: spawnX, y: spawnY };
@@ -540,40 +547,80 @@ function setupControls() {
     // Restart button
     document.getElementById('restart-btn').addEventListener('click', restartGame);
     
-    // Touch controls for mobile
+    // Enhanced touch controls for mobile
     let touchStartX = 0;
     let touchStartY = 0;
+    let touchStartTime = 0;
+    let isTouchActive = false;
     
     canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
         const touch = e.touches[0];
         touchStartX = touch.clientX;
         touchStartY = touch.clientY;
+        touchStartTime = Date.now();
+        isTouchActive = true;
+        
+        // Haptic feedback on touch start
+        if (navigator.vibrate) {
+            navigator.vibrate(10); // Short vibration
+        }
     });
     
     canvas.addEventListener('touchend', (e) => {
         e.preventDefault();
-        if (gameState.gameOver) return;
+        if (gameState.gameOver || !isTouchActive) return;
         
         const touch = e.changedTouches[0];
         const deltaX = touch.clientX - touchStartX;
         const deltaY = touch.clientY - touchStartY;
+        const touchDuration = Date.now() - touchStartTime;
         
-        if (Math.abs(deltaX) > Math.abs(deltaY)) {
-            // Horizontal swipe
-            if (deltaX > 30) {
-                movePiece('right');
-            } else if (deltaX < -30) {
-                movePiece('left');
+        // Minimum swipe distance
+        const minSwipeDistance = 40;
+        
+        // Tap detection (short touch, small movement)
+        if (touchDuration < 200 && Math.abs(deltaX) < 20 && Math.abs(deltaY) < 20) {
+            // Tap to rotate
+            rotatePiece();
+            if (navigator.vibrate) {
+                navigator.vibrate(20); // Medium vibration for rotation
             }
-        } else {
-            // Vertical swipe
-            if (deltaY > 30) {
-                dropPiece();
-            } else if (deltaY < -30) {
-                rotatePiece();
+            isTouchActive = false;
+            return;
+        }
+        
+        // Swipe detection
+        if (Math.abs(deltaX) > minSwipeDistance || Math.abs(deltaY) > minSwipeDistance) {
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                // Horizontal swipe
+                if (deltaX > minSwipeDistance) {
+                    movePiece('right');
+                } else if (deltaX < -minSwipeDistance) {
+                    movePiece('left');
+                }
+            } else {
+                // Vertical swipe
+                if (deltaY > minSwipeDistance) {
+                    dropPiece();
+                    if (navigator.vibrate) {
+                        navigator.vibrate(30); // Strong vibration for drop
+                    }
+                } else if (deltaY < -minSwipeDistance) {
+                    rotatePiece();
+                    if (navigator.vibrate) {
+                        navigator.vibrate(20); // Medium vibration for rotation
+                    }
+                }
             }
         }
+        
+        isTouchActive = false;
+    });
+    
+    canvas.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        isTouchActive = false;
     });
 }
 
@@ -591,13 +638,13 @@ function setupCollisionDetection() {
 
 // Check if current piece has landed on something
 function checkPieceLanded() {
-    if (!gameState.currentPiece) return;
+    if (!gameState.currentPiece || gameState.currentPiece.hasLanded) return;
     
     const body = gameState.currentPiece.body;
     const velocity = body.velocity;
     
-    // Only check if piece is falling down (positive Y velocity means falling)
-    if (velocity.y > -0.1 && Math.abs(velocity.x) < 0.1) {
+    // More lenient velocity check for smoother sliding
+    if (velocity.y > -0.2 && Math.abs(velocity.x) < 0.3) {
         // Check if piece is actually touching something
         const contacts = Matter.Query.region(engine.world.bodies, body.bounds);
         
@@ -609,12 +656,25 @@ function checkPieceLanded() {
                 gameState.walls.includes(contact) || 
                 gameState.pieces.some(piece => piece.body === contact)) {
                 
-                // Additional check: make sure the piece is actually on top
+                // More generous positioning check for smoother placement
                 const currentBottom = body.bounds.max.y;
                 const contactTop = contact.bounds.min.y;
+                const currentLeft = body.bounds.min.x;
+                const currentRight = body.bounds.max.x;
+                const contactLeft = contact.bounds.min.x;
+                const contactRight = contact.bounds.max.x;
                 
-                // Only spawn next piece if current piece is on top of the contact
-                if (currentBottom >= contactTop - 5) { // 5px tolerance
+                // Check if piece is on top with more tolerance
+                const verticalOverlap = currentBottom >= contactTop - 8; // Increased from 5px to 8px
+                
+                // Check if pieces are horizontally aligned (allowing some sliding)
+                const horizontalOverlap = !(currentRight < contactLeft - 10 || currentLeft > contactRight + 10);
+                
+                // Only spawn next piece if piece is on top and horizontally aligned
+                if (verticalOverlap && horizontalOverlap) {
+                    // Mark piece as landed to prevent multiple spawns
+                    gameState.currentPiece.hasLanded = true;
+                    
                     // Spawn next piece immediately
                     gameState.currentPiece = null;
                     setTimeout(() => {
@@ -704,5 +764,53 @@ function restartGame() {
     initGame();
 }
 
+// Mobile detection and orientation handling
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+           ('ontouchstart' in window) || 
+           (navigator.maxTouchPoints > 0);
+}
+
+// Handle orientation changes
+function handleOrientationChange() {
+    if (isMobileDevice()) {
+        // Force a small delay to let CSS media queries apply
+        setTimeout(() => {
+            // Resize canvas if needed
+            if (render && render.canvas) {
+                const canvas = render.canvas;
+                const container = canvas.parentElement;
+                const containerRect = container.getBoundingClientRect();
+                
+                // Adjust canvas size based on container
+                if (containerRect.width > 0 && containerRect.height > 0) {
+                    canvas.style.width = Math.min(containerRect.width, 400) + 'px';
+                    canvas.style.height = Math.min(containerRect.height * 0.6, 600) + 'px';
+                }
+            }
+        }, 100);
+    }
+}
+
 // Start the game when page loads
 window.addEventListener('load', initGame);
+
+// Handle orientation changes
+window.addEventListener('orientationchange', handleOrientationChange);
+window.addEventListener('resize', handleOrientationChange);
+
+// Prevent zoom on double tap (mobile)
+document.addEventListener('touchstart', function(event) {
+    if (event.touches.length > 1) {
+        event.preventDefault();
+    }
+});
+
+let lastTouchEnd = 0;
+document.addEventListener('touchend', function(event) {
+    const now = (new Date()).getTime();
+    if (now - lastTouchEnd <= 300) {
+        event.preventDefault();
+    }
+    lastTouchEnd = now;
+}, false);
