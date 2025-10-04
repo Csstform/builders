@@ -1128,7 +1128,13 @@ function handleOrientationChange() {
 }
 
 // Start the game when page loads
-window.addEventListener('load', initGame);
+window.addEventListener('load', () => {
+    initGame();
+    // Dispatch game ready event for splash screen
+    setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('gameReady'));
+    }, 1000); // Give game 1 second to fully initialize
+});
 
 // Handle orientation changes
 window.addEventListener('orientationchange', handleOrientationChange);

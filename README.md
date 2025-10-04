@@ -1,4 +1,4 @@
-# Tower Tetris - Physics Stacking Game
+# Tetro Builders - Physics Stacking Game
 
 A strategic physics-based Tetris game where you stack tetrominoes to build the tallest tower possible. Lose a life when pieces fall off the platform, and aim for the highest score based on your tower's height!
 
