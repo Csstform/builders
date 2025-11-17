@@ -86,11 +86,20 @@
                 <h2>Score: <span id="score">0</span></h2>
                 <h3>Height: <span id="height">0</span></h3>
                 <h3>Lives: <span id="lives">3</span></h3>
+                <div class="high-scores">
+                    <h4>🏆 Best</h4>
+                    <p>Score: <span id="high-score">0</span></p>
+                    <p>Height: <span id="high-height">0</span></p>
+                </div>
                 <div class="stability-indicator">
                     <h4>Stability: <span id="stability">100%</span></h4>
                     <div class="stability-bar">
                         <div class="stability-fill" id="stability-fill"></div>
                     </div>
+                </div>
+                <div class="volume-control">
+                    <span id="volume-icon">🔊</span>
+                    <input type="range" id="volume-slider" min="0" max="100" value="100" class="volume-slider">
                 </div>
             </div>
             <div class="next-piece">
@@ -105,7 +114,48 @@
                 <h2>Game Over!</h2>
                 <p>Final Score: <span id="final-score">0</span></p>
                 <p>Final Height: <span id="final-height">0</span></p>
+                <div class="high-scores-game-over">
+                    <h3>🏆 Best</h3>
+                    <p>Score: <span id="high-score-game-over">0</span></p>
+                    <p>Height: <span id="high-height-game-over">0</span></p>
+                </div>
                 <button id="restart-btn">Play Again</button>
+            </div>
+            <div class="pause-overlay" id="pause-overlay" style="display: none;">
+                <div class="pause-content">
+                    <h2>⏸️ Paused</h2>
+                    <p>Press P or ESC to resume</p>
+                    <button id="resume-btn">Resume</button>
+                </div>
+            </div>
+            <div class="tutorial-overlay" id="tutorial-overlay" style="display: none;">
+                <div class="tutorial-content">
+                    <h2>Welcome to Tetro Builders!</h2>
+                    <div class="tutorial-step" id="tutorial-step-1">
+                        <h3>🎯 Objective</h3>
+                        <p>Stack tetrominoes to build the tallest tower possible!</p>
+                        <p>You have 3 lives. Lose a life when a block falls off the platform.</p>
+                    </div>
+                    <div class="tutorial-step" id="tutorial-step-2" style="display: none;">
+                        <h3>⌨️ Controls</h3>
+                        <p><strong>Arrow Keys / Swipe:</strong> Move pieces (half-steps)</p>
+                        <p><strong>R / Tap:</strong> Rotate piece</p>
+                        <p><strong>Space / Swipe Down:</strong> Drop piece faster</p>
+                        <p><strong>P / ESC:</strong> Pause game</p>
+                    </div>
+                    <div class="tutorial-step" id="tutorial-step-3" style="display: none;">
+                        <h3>💡 Tips</h3>
+                        <p>• Build a stable base first</p>
+                        <p>• Watch the stability indicator</p>
+                        <p>• Pieces spawn when they touch another piece or the base</p>
+                        <p>• The camera follows your tower as it grows</p>
+                    </div>
+                    <div class="tutorial-buttons">
+                        <button id="tutorial-prev" style="display: none;">Previous</button>
+                        <button id="tutorial-next">Next</button>
+                        <button id="tutorial-skip" class="skip-btn">Skip Tutorial</button>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -136,10 +186,18 @@
     </div>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-    <script src="game.js"></script>
+    <script type="module" src="js/game.js"></script>
     
     <!-- PWA Installation Script -->
     <script>
+        // Mobile device detection (inline version for immediate use)
+        // Must be defined first before any code that uses it
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                   ('ontouchstart' in window) || 
+                   (navigator.maxTouchPoints > 0);
+        }
+
         // Register service worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -250,10 +308,12 @@
 
         // Show splash screen for minimum time and wait for game to load
         let gameLoaded = false;
-        let minSplashTime = 2500; // Minimum 2.5 seconds
+        let splashHidden = false;
+        let minSplashTime = 2000; // Minimum 2 seconds
         
         function checkReadyToHide() {
-            if (gameLoaded && minSplashTime <= 0) {
+            if (!splashHidden && gameLoaded && minSplashTime <= 0) {
+                splashHidden = true;
                 hideSplashScreen();
             }
         }
@@ -267,19 +327,45 @@
             }
         }, 100);
 
-        // Listen for game initialization
+        // Listen for game initialization (set up immediately)
         window.addEventListener('gameReady', () => {
+            console.log('Game ready event received');
             gameLoaded = true;
             checkReadyToHide();
         });
 
-        // Fallback: hide splash after maximum time
+        // Multiple fallbacks to ensure splash screen always hides
+        // Fallback 1: Hide after reasonable time even if gameReady never fires
         setTimeout(() => {
-            if (!gameLoaded) {
+            console.log('Fallback 1: Forcing splash hide after 3 seconds');
+            if (!splashHidden) {
                 gameLoaded = true;
+                minSplashTime = 0;
                 checkReadyToHide();
             }
+        }, 3000);
+
+        // Fallback 2: Hide after maximum time
+        setTimeout(() => {
+            console.log('Fallback 2: Forcing splash hide after 5 seconds');
+            if (!splashHidden) {
+                splashHidden = true;
+                hideSplashScreen();
+            }
         }, 5000);
+
+        // Fallback 3: Check if DOMContentLoaded already fired
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            // Page already loaded, set a shorter timeout
+            setTimeout(() => {
+                if (!splashHidden) {
+                    console.log('Fallback 3: Page already loaded, hiding splash');
+                    gameLoaded = true;
+                    minSplashTime = 0;
+                    checkReadyToHide();
+                }
+            }, 1000);
+        }
     </script>
 </body>
 </html>

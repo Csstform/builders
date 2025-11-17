@@ -77,12 +77,68 @@ Build the tallest tower possible by stacking tetrominoes on a small platform. Yo
 - **Vanilla JavaScript**: No frameworks, pure JS implementation
 - **CSS3**: Modern styling with glassmorphism and responsive design
 
+## 🚀 Getting Started
+
+### Running Locally
+
+**Important:** This game uses ES6 modules, which require a web server. You cannot open `index.html` directly from the file system.
+
+#### Option 1: Use the provided server scripts
+
+**Windows:**
+```bash
+server.bat
+```
+
+**Mac/Linux:**
+```bash
+chmod +x server.sh
+./server.sh
+```
+
+**Python (any OS):**
+```bash
+python server.py
+```
+
+#### Option 2: Use Node.js
+```bash
+npx http-server -p 8000 -o
+```
+
+#### Option 3: Use PHP
+```bash
+php -S localhost:8000
+```
+
+#### Option 4: Use Python's built-in server
+```bash
+python -m http.server 8000
+```
+
+Then open `http://localhost:8000` in your browser.
+
 ### File Structure
 ```
 builders/
 ├── index.html          # Main HTML file
 ├── style.css           # Game styling and responsive design
-├── game.js             # Core game logic and physics
+├── js/                 # JavaScript modules
+│   ├── game.js         # Main game orchestration
+│   ├── constants.js    # Game constants
+│   ├── gameState.js    # State management
+│   ├── physics.js      # Physics engine setup
+│   ├── pieces.js       # Piece management
+│   ├── collision.js    # Collision detection
+│   ├── controls.js     # Input handling
+│   ├── ui.js           # UI and rendering
+│   ├── tutorial.js     # Tutorial system
+│   └── audio.js        # Sound system
+├── server.py           # Python server script
+├── server.bat          # Windows server script
+├── server.sh           # Unix server script
+├── sw.js               # Service worker
+├── manifest.json       # PWA manifest
 └── README.md           # This file
 ```
 
